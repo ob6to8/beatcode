@@ -31,8 +31,8 @@ fn p2_render_determinism() {
     let src = read_example("dilla");
     let evs = compile_events(&src);
     assert_eq!(
-        render::render(&evs).sha256_hex,
-        render::render(&evs).sha256_hex
+        render::render(&evs).expect("render").sha256_hex,
+        render::render(&evs).expect("render").sha256_hex
     );
 }
 
@@ -90,7 +90,7 @@ fn p5_humanize_seed_stability() {
 #[test]
 fn p6_wav_header_sanity() {
     let evs = compile_events(&read_example("four"));
-    let r = render::render(&evs);
+    let r = render::render(&evs).expect("render");
     let b = &r.wav_bytes;
     assert_eq!(&b[0..4], b"RIFF");
     assert_eq!(&b[8..12], b"WAVE");

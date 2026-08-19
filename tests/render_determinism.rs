@@ -10,7 +10,7 @@ fn render_example(name: &str) -> render::Render {
         .expect("read score");
     let sc = score::parse(&src).expect("parse");
     let evs = events::compile(&sc).expect("compile");
-    render::render(&evs)
+    render::render(&evs).expect("render")
 }
 
 /// Two renders of every example, byte-identical WAVs and equal hashes.
@@ -30,7 +30,7 @@ fn empty_mix_is_one_second() {
     let sc = score::parse("tempo 100\n").expect("parse");
     let evs = events::compile(&sc).expect("compile");
     assert!(evs.is_empty());
-    let r = render::render(&evs);
+    let r = render::render(&evs).expect("render");
     assert_eq!(r.frames, 44100);
     assert!(!r.peak_normalized);
     assert!(r.wav_bytes[44..].iter().all(|&b| b == 0), "silence");

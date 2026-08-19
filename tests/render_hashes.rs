@@ -25,7 +25,7 @@ fn render_hashes_match_committed_goldens() {
             std::fs::read_to_string(format!("{root}/examples/{stem}.bc")).expect("read score");
         let sc = score::parse(&src).expect("parse");
         let evs = events::compile(&sc).expect("compile");
-        let r = render::render(&evs);
+        let r = render::render(&evs).expect("render");
         assert_eq!(r.sha256_hex, want, "{name}: render hash");
         checked += 1;
     }

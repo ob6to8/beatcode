@@ -35,7 +35,9 @@ jobs:
 
       - name: banned tokens in the render path (SPEC §8.4)
         run: |
-          if grep -RnE '\.sin\(|\.cos\(|\.exp\(|powf|mul_add' src/; then
+          # The spec's five tokens, plus the wider libm-lowered family
+          # the §8.4 rule exists to keep out (powi is also unpinned).
+          if grep -RnE '\.sin\(|\.cos\(|\.exp\(|powf|mul_add|\.tan\(|\.asin\(|\.acos\(|\.atan\(|\.atan2\(|\.sin_cos\(|\.sinh\(|\.cosh\(|\.tanh\(|\.asinh\(|\.acosh\(|\.atanh\(|\.exp2\(|\.exp_m1\(|\.ln\(|\.ln_1p\(|\.log|\.cbrt\(|\.hypot\(|\.powi\(' src/; then
             echo "banned transcendental/FMA token found in src/"; exit 1
           fi
 
@@ -55,11 +57,19 @@ jobs:
           if grep -Rn '#\[ignore' src/ tests/; then
             echo "#[ignore] found — ignoring tests is not allowed"; exit 1
           fi
+          # Semantic check: the ignored-test set must be empty however it
+          # was produced (catches cfg_attr(..., ignore) and friends,
+          # which the textual grep cannot see).
+          ignored=$(cargo test -- --list --ignored 2>/dev/null | grep ': test$' || true)
+          if [ -n "$ignored" ]; then
+            echo "ignored tests found:"; echo "$ignored"; exit 1
+          fi
+          # The manifest is the authoritative test roster: exact match
+          # required, so deletions always fail and additions must update
+          # .github/test-manifest.txt in the same (reviewable) commit.
           cargo test -- --list 2>/dev/null | grep ': test$' | sed 's/: test$//' | sort -u > "${RUNNER_TEMP}/current-tests.txt"
-          missing=$(comm -23 <(sort -u .github/test-manifest.txt) "${RUNNER_TEMP}/current-tests.txt")
-          if [ -n "$missing" ]; then
-            echo "tests deleted (present in .github/test-manifest.txt, absent from cargo test --list):"
-            echo "$missing"
+          if ! diff -u .github/test-manifest.txt "${RUNNER_TEMP}/current-tests.txt"; then
+            echo "test roster differs from .github/test-manifest.txt (deletions are forbidden; additions must be recorded there)"
             exit 1
           fi
 

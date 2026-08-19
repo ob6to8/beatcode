@@ -1,8 +1,15 @@
 //! WAV container (SPEC §9.7): 44-byte canonical PCM header followed by
 //! `frames × 4` data bytes — 44100 Hz, stereo, s16le.
 
+/// The container's hard ceiling: `data_size` and `36 + data_size` are
+/// u32 fields (SPEC §9.7), so at 4 bytes/frame at most
+/// (2^32 − 1 − 36) / 4 frames (≈ 6.76 hours) fit. Render enforces it
+/// with a clean error (SPEC-GAPS #9).
+pub const MAX_FRAMES: usize = ((u32::MAX as usize) - 36) / 4;
+
 /// The exact 44-byte header for a stereo s16 stream of `frames` frames.
 pub fn header(frames: usize) -> [u8; 44] {
+    assert!(frames <= MAX_FRAMES, "frame count exceeds WAV u32 sizes");
     let data_size = (frames * 4) as u32;
     let mut h = [0u8; 44];
     h[0..4].copy_from_slice(b"RIFF");

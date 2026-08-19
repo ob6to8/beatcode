@@ -227,7 +227,9 @@ fn parse_notefrac(tok: &str, line: usize) -> Result<Rational, Error> {
     }
     let n = parse_int(n_s, line)?;
     let d = parse_int(d_s, line)?;
-    if n <= 0 || d <= 0 {
+    // §5.10 #12 rejects zero/negative notefracs — the fraction's VALUE:
+    // `-1/-4` is a positive quarter and stays accepted.
+    if n == 0 || d == 0 || (n < 0) != (d < 0) {
         return Err(err(
             line,
             format!("bad note fraction '{tok}' (must be positive)"),

@@ -196,14 +196,20 @@ fn compile_voice(
         let performed = clamp0(((grid.to_f() * spb + swing_s) + lane_s) + hum_s);
         // All literals are finite (§5.8 num!), but extreme-magnitude
         // combinations can still overflow to ±inf (and 0·inf to NaN)
-        // mid-pipeline. The oracle raises on any such operation; keep
-        // §2.3's "performed_s is finite" contract with a clean error
-        // before anything non-finite reaches rounding or JSONL
-        // (SPEC-GAPS #7).
-        if !(swing_s.is_finite()
-            && lane_s.is_finite()
-            && hum_s.is_finite()
-            && performed.is_finite())
+        // mid-pipeline — including at the ×1000 ms scaling, where a
+        // finite seconds value can overflow. The oracle raises on any
+        // such operation; keep §2.3's finiteness contract with a clean
+        // error by checking the STORED (rounded, ms-scale) fields —
+        // round_dec passes non-finite values through untouched, so the
+        // check sees exactly what JSONL would serialize (SPEC-GAPS #7).
+        let swing_ms = round_dec(swing_s * 1000.0, 3);
+        let lane_ms = round_dec(lane_s * 1000.0, 3);
+        let hum_ms = round_dec(hum_s * 1000.0, 3);
+        let performed_s = round_dec(performed, 6);
+        if !(swing_ms.is_finite()
+            && lane_ms.is_finite()
+            && hum_ms.is_finite()
+            && performed_s.is_finite())
         {
             return Err(Error::Compile(format!(
                 "voice {}: non-finite event timing (arithmetic overflow)",
@@ -216,10 +222,10 @@ fn compile_voice(
             step: i,
             grid,
             vel,
-            swing_ms: round_dec(swing_s * 1000.0, 3),
-            lane_ms: round_dec(lane_s * 1000.0, 3),
-            hum_ms: round_dec(hum_s * 1000.0, 3),
-            performed_s: round_dec(performed, 6),
+            swing_ms,
+            lane_ms,
+            hum_ms,
+            performed_s,
             pitch,
             gain: v.gain,
             pan: v.pan,

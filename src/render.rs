@@ -4,6 +4,7 @@
 //! s16, LE interleave. No reassociation, no SIMD, no fused
 //! multiply-add.
 
+use crate::error::Error;
 use crate::events::Event;
 use crate::synth::{Kit, cos_p, sin_p};
 use crate::{sha256, wav};
@@ -16,7 +17,10 @@ pub struct Render {
     pub sha256_hex: String,
 }
 
-pub fn render(events: &[Event]) -> Render {
+/// Render the sorted event list. Errors (cleanly, per §5.9) when an
+/// event's placement would exceed the WAV container's u32 size fields
+/// (SPEC-GAPS #9) — reachable only through extreme-magnitude scores.
+pub fn render(events: &[Event]) -> Result<Render, Error> {
     let mut kit = Kit::new();
     let mut mix: Vec<(f64, f64)> = Vec::new();
     let mut last: Option<usize> = None; // highest frame index touched
@@ -27,7 +31,17 @@ pub fn render(events: &[Event]) -> Render {
     for e in events {
         let buf = kit.buffer(e.kind, e.pitch.as_deref());
         // f0 from the ROUNDED 6-decimal performed_s (SPEC §12.4 trap 4).
-        let f0 = (e.performed_s * 44100.0).trunc() as usize;
+        // Bounds-check in f64 BEFORE the cast: `as usize` saturates, so
+        // a huge-but-finite performed_s would otherwise wrap the
+        // placement arithmetic and panic (or resize to absurdity).
+        let f0f = (e.performed_s * 44100.0).trunc();
+        if f0f + (buf.len() + 22050) as f64 > wav::MAX_FRAMES as f64 {
+            return Err(Error::Compile(format!(
+                "render too long for the WAV container (u32 sizes cap it at ~{} s)",
+                wav::MAX_FRAMES / 44100
+            )));
+        }
+        let f0 = f0f as usize;
         // amp = pow(vel/127, 1.5) × gain, realized as x·sqrt(x) —
         // sqrt is an exactly-specified IEEE op (SPEC §8.4, §9.2).
         let x = e.vel as f64 / 127.0;
@@ -73,11 +87,11 @@ pub fn render(events: &[Event]) -> Render {
     let wav_bytes = wav::file_bytes(&frames_s16);
     // The receipt: sha256 over the ENTIRE file bytes (SPEC §9.8).
     let sha256_hex = sha256::hex(&wav_bytes);
-    Render {
+    Ok(Render {
         wav_bytes,
         frames,
         events: events.len(),
         peak_normalized,
         sha256_hex,
-    }
+    })
 }

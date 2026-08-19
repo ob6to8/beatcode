@@ -10,10 +10,12 @@ the call, record it here (section cite + choice + why), and continue.
 value* there, and §5.9 wants clean errors everywhere. Chose: `round_dec`
 returns the input unchanged outside the domain (matches §E8 exactly);
 `format_dec` falls back to Rust's shortest-round-trip `Display` there.
-Why: conforms to the probe, avoids an unclean panic reachable only
-through adversarial inputs (e.g. astronomically large verbatim
-`gain=`/`pan=` literals — every ms/performed field is value-rounded
-first and is orders of magnitude inside the domain).
+Why: conforms to the probe, avoids an unclean panic. Reachable from
+grammar-legal extremes (a huge verbatim `gain=` literal, or a
+`performed_s` past ~9.0e9 s via an enormous `time` lane), so the
+fallback keeps §7's "at least one fractional digit" by appending
+`.0` to integral Display output; non-finite values cannot reach
+serialization at all (#7).
 
 ## 2 · `swing <amt> <tok>`: a present-but-malformed sub errors
 
@@ -72,10 +74,13 @@ arithmetic raises badarith, exactly as the transcript shows for
 `tempo 0`). Chose: (a) num! rejects tokens whose value is non-finite
 ("bad number", line-cited); (b) a subnormal tempo whose `spb`
 overflows is a clean compile error like the tempo-0 posture (#11);
-(c) any per-event timing term or `performed` that is non-finite is a
-clean compile error before rounding/serialization; (d) `decfmt`
-defensively passes non-finite inputs through unchanged instead of
-panicking. Accept/reject matches the oracle on every such input.
+(c) the STORED event fields (`swing_ms`/`lane_ms`/`hum_ms` after the
+×1000 scaling and rounding, and `performed_s`) are checked finite
+before serialization — the check runs on exactly what JSONL would
+emit, so a finite seconds value whose ×1000 overflows is also caught;
+(d) `decfmt` defensively passes non-finite inputs through unchanged
+instead of panicking. Accept/reject matches the oracle on every such
+input.
 
 ## 8 · Enormous `bars` values run unbounded, like the oracle
 
@@ -87,3 +92,16 @@ impractical, and any cap would arbitrarily reject scores the oracle
 accepts (e.g. `bars 100000` compiles fine in seconds). Chose: no cap;
 genuine i64/rational overflow still surfaces the clean "rational
 overflow" error.
+
+## 9 · Renders past the WAV container's u32 sizes are a clean error
+
+§9.7's header carries `data_size` and `36 + data_size` as u32 fields,
+capping a render at (2^32 − 1 − 36)/4 frames ≈ 6.76 hours. A
+grammar-legal score can place an event far beyond that
+(`time [1e18ms]` → performed_s ≈ 1e15 s — Class A `events` output is
+fine), where naive placement arithmetic would wrap/panic and even a
+"successful" file would lie about its size. Chose: `render` checks
+each event's placement against the container bound and raises a clean
+error ("render too long for the WAV container"); `events` is
+unaffected. Why: §5.9's clean-error rule; the bound is the format's
+own physical limit, not an arbitrary cap.

@@ -24,13 +24,27 @@ fn fail(msg: &str) -> ! {
     std::process::exit(1);
 }
 
+/// All stdout goes through here: a downstream close (`bc events x |
+/// head -1`) is a normal end of output, not a panic; other write
+/// errors get the clean §5.9 treatment.
+fn out(s: &str) {
+    use std::io::Write;
+    let mut stdout = std::io::stdout().lock();
+    if let Err(e) = stdout.write_all(s.as_bytes()).and_then(|()| stdout.flush()) {
+        if e.kind() == std::io::ErrorKind::BrokenPipe {
+            std::process::exit(0);
+        }
+        fail(&format!("cannot write to stdout: {e}"));
+    }
+}
+
 /// Full pipeline: read → parse → compile → render.
 fn build(score_path: &str) -> Result<render::Render, String> {
     let src = std::fs::read_to_string(score_path)
         .map_err(|e| format!("cannot read {score_path}: {e}"))?;
     let sc = score::parse(&src).map_err(|e| e.to_string())?;
     let evs = events::compile(&sc).map_err(|e| e.to_string())?;
-    Ok(render::render(&evs))
+    render::render(&evs).map_err(|e| e.to_string())
 }
 
 /// Default output path: `renders/<basename minus .bc>.wav`.
@@ -70,14 +84,14 @@ fn render_to(score_path: &str, out: &Path) -> Result<render::Render, String> {
     } else {
         ""
     };
-    println!(
-        "{}  {}s  {} events  sha256={}{}",
+    self::out(&format!(
+        "{}  {}s  {} events  sha256={}{}\n",
         out.display(),
         seconds(r.frames),
         r.events,
         r.sha256_hex,
         flag
-    );
+    ));
     Ok(r)
 }
 
@@ -101,10 +115,10 @@ fn play_file(path: &Path) {
             Err(_) => continue,
         }
     }
-    println!(
-        "no audio player found — rendered file is at {}",
+    out(&format!(
+        "no audio player found — rendered file is at {}\n",
         path.display()
-    );
+    ));
 }
 
 /// `play`: render to the default path, print the short receipt
@@ -113,12 +127,12 @@ fn cmd_play(score_path: &str) -> Result<(), String> {
     let out = default_out(score_path);
     let r = build(score_path)?;
     write_wav(&out, &r.wav_bytes)?;
-    println!(
-        "{}  {}s  sha256={}…",
+    self::out(&format!(
+        "{}  {}s  sha256={}…\n",
         out.display(),
         seconds(r.frames),
         &r.sha256_hex[..12]
-    );
+    ));
     play_file(&out);
     Ok(())
 }
@@ -135,7 +149,7 @@ fn cmd_loop(score_path: &str) -> ! {
         if mtime.is_some() && mtime != last_mtime {
             last_mtime = mtime;
             if let Err(msg) = cmd_play(score_path) {
-                println!("!! {msg} (fix and save again)");
+                out(&format!("!! {msg} (fix and save again)\n"));
             }
         }
         std::thread::sleep(std::time::Duration::from_millis(200));
@@ -158,7 +172,16 @@ fn cmd_demo() -> Result<(), String> {
 }
 
 pub fn run() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    // args_os + explicit conversion: a non-UTF-8 argument gets a clean
+    // error instead of std::env::args()'s panic.
+    let args: Vec<String> = match std::env::args_os()
+        .skip(1)
+        .map(std::ffi::OsString::into_string)
+        .collect::<Result<_, _>>()
+    {
+        Ok(v) => v,
+        Err(_) => fail("invalid UTF-8 in command-line arguments"),
+    };
     let arg = |i: usize| args.get(i).map(String::as_str);
     let result: Result<(), String> = match (arg(0), arg(1)) {
         (Some("events"), Some(path)) => {
@@ -169,7 +192,7 @@ pub fn run() {
             let evs = score::parse(&src)
                 .and_then(|sc| events::compile(&sc))
                 .unwrap_or_else(|e| fail(&e.to_string()));
-            print!("{}", jsonl::events_jsonl(&evs));
+            out(&jsonl::events_jsonl(&evs));
             Ok(())
         }
         (Some("render"), Some(path)) => {

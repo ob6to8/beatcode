@@ -69,7 +69,7 @@ fn wav_header_sanity_on_render() {
         .expect("read four.bc");
     let sc = bc::score::parse(&src).expect("parse");
     let evs = bc::events::compile(&sc).expect("compile");
-    let r = bc::render::render(&evs);
+    let r = bc::render::render(&evs).expect("render");
     let b = &r.wav_bytes;
     assert_eq!(&b[0..4], b"RIFF");
     assert_eq!(&b[8..12], b"WAVE");

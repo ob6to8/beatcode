@@ -85,7 +85,14 @@ pub fn round_dec(x: f64, n: u32) -> f64 {
 /// `ftb(-1.0e-7) = -0.0`), unlike value-rounding.
 pub fn format_dec(x: f64, n: u32) -> String {
     let Some(q1) = qprime(x, n) else {
-        return format!("{x}"); // out of domain: shortest round-trip (SPEC-GAPS)
+        // Out of domain: shortest round-trip (SPEC-GAPS #1), keeping
+        // §7's "at least one fractional digit" for integral values.
+        let s = format!("{x}");
+        return if x.is_finite() && !s.contains(['.', 'e', 'E']) {
+            format!("{s}.0")
+        } else {
+            s
+        };
     };
     let (neg, ..) = decompose(x);
     let digits = format!("{:0>width$}", q1, width = n as usize + 1);

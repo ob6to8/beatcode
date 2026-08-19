@@ -12,6 +12,17 @@ fn repo(path: &str) -> String {
     format!("{}/{path}", env!("CARGO_MANIFEST_DIR"))
 }
 
+/// Kills the spawned process even when an assertion panics mid-test,
+/// so a failure can't leak an orphaned `bc loop` holding pipes open.
+struct KillOnDrop(std::process::Child);
+
+impl Drop for KillOnDrop {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
 fn scratch(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("bc-cli-test-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -36,7 +47,6 @@ fn render_receipt_and_file() {
     let parts: Vec<&str> = line.split("  ").collect();
     assert_eq!(parts.len(), 4, "two-space separators: {line}");
     assert_eq!(parts[0], out.to_string_lossy());
-    assert!(parts[1].ends_with('s'), "seconds: {line}");
     assert_eq!(parts[2], "44 events", "{line}");
     assert!(
         parts[3].starts_with("sha256=") && parts[3].len() == 7 + 64,
@@ -44,6 +54,11 @@ fn render_receipt_and_file() {
     );
     let wav = std::fs::read(&out).expect("wav written");
     assert_eq!(&wav[0..4], b"RIFF");
+    // Seconds = frames/44100, §6.10-rounded to 2 decimals — exact text,
+    // not just a trailing 's'.
+    let frames = (wav.len() - 44) / 4;
+    let want_secs = format!("{}s", bc::decfmt::format_dec(frames as f64 / 44100.0, 2));
+    assert_eq!(parts[1], want_secs, "{line}");
 }
 
 /// edge.bc's receipt carries the `(peak-normalized)` flag (§9.5/§10).
@@ -177,13 +192,16 @@ fn loop_survives_score_error_and_keeps_watching() {
     let score = dir.join("jam.bc");
     std::fs::write(&score, "voice k sample=kick\n  gate x.q.\n").expect("write bad score");
 
-    let mut child = Command::new(BIN)
-        .args(["loop", "jam.bc"])
-        .current_dir(&dir)
-        .env("PATH", "") // deterministic: no player, no blocking
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("spawn bc loop");
+    let mut child = KillOnDrop(
+        Command::new(BIN)
+            .args(["loop", "jam.bc"])
+            .current_dir(&dir)
+            .env("PATH", "") // deterministic: no player, no blocking
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("spawn bc loop"),
+    );
+    let child = &mut child.0;
     let stdout = child.stdout.take().expect("stdout");
     let (tx, rx) = std::sync::mpsc::channel::<String>();
     std::thread::spawn(move || {
@@ -222,9 +240,26 @@ fn loop_survives_score_error_and_keeps_watching() {
     std::fs::write(&score, "voice k sample=kick\n  gate x...\n").expect("write good score");
     let l = next_line("receipt line");
     assert!(l.contains("sha256="), "got: {l}");
+    // With PATH empty, play falls back to the not-found message — drain
+    // it before asserting silence below.
+    let l = next_line("player fallback line");
+    assert!(l.starts_with("no audio player found"), "got: {l}");
     assert!(dir.join("renders/jam.wav").exists());
     assert!(child.try_wait().expect("try_wait").is_none(), "loop exited");
 
-    child.kill().expect("kill");
-    let _ = child.wait();
+    // A vanished file just keeps polling (§10): no output, no exit.
+    std::fs::remove_file(&score).expect("remove score");
+    std::thread::sleep(Duration::from_millis(700));
+    assert!(
+        rx.try_recv().is_err(),
+        "no output expected while the file is gone"
+    );
+    assert!(child.try_wait().expect("try_wait").is_none(), "loop exited");
+
+    // Reappearing file (new mtime) triggers a fresh render.
+    std::fs::write(&score, "voice k sample=kick\n  gate x.x.\n").expect("recreate score");
+    let l = next_line("receipt after reappearing");
+    assert!(l.contains("sha256="), "got: {l}");
+
+    // KillOnDrop reaps the loop process (here and on any earlier panic).
 }
