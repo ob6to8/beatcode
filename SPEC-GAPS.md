@@ -59,3 +59,31 @@ whose formatting half trims trailing zeros keeping ≥ 1 fractional
 digit — so exactly 2.60 s prints `2.6s`, not `2.60s`. Chose: use the
 shared routine unmodified (the spec's "one routine serves" §12.5 note).
 Informative surface either way.
+
+## 7 · Non-finite values are rejected, mirroring the oracle's raises
+
+§5.8's num! grammar admits literals whose f64 value overflows
+(`1e999`), and finite extremes can overflow mid-pipeline
+(`time [1e308]` at a huge step length) — Rust would carry `inf`/`NaN`
+into `performed_s`, contradicting §2.3's "performed_s is finite" and
+emitting invalid JSONL. The oracle cannot reach that state at all: its
+floats have no infinities (`Float.parse` errors on overflow; float
+arithmetic raises badarith, exactly as the transcript shows for
+`tempo 0`). Chose: (a) num! rejects tokens whose value is non-finite
+("bad number", line-cited); (b) a subnormal tempo whose `spb`
+overflows is a clean compile error like the tempo-0 posture (#11);
+(c) any per-event timing term or `performed` that is non-finite is a
+clean compile error before rounding/serialization; (d) `decfmt`
+defensively passes non-finite inputs through unchanged instead of
+panicking. Accept/reject matches the oracle on every such input.
+
+## 8 · Enormous `bars` values run unbounded, like the oracle
+
+`bars 400000000` is grammar-legal, passes `bars ≥ 1`, and compiles
+~6.4e9 steps per voice — minutes of CPU or an OOM kill, not a clean
+error. The oracle behaves identically (its comprehension over the
+step range is just as unbounded), §3 calls large magnitudes merely
+impractical, and any cap would arbitrarily reject scores the oracle
+accepts (e.g. `bars 100000` compiles fine in seconds). Chose: no cap;
+genuine i64/rational overflow still surfaces the clean "rational
+overflow" error.

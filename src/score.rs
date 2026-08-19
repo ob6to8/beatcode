@@ -109,12 +109,16 @@ fn err(line: usize, msg: String) -> Error {
 /// num! (SPEC §5.8): strip **all** leading '+', then require full
 /// consumption of `sign? digits ('.' digits)? ([eE] sign? digits)?`.
 /// So `++5` parses (via the strip) where the raw primitive would not.
+/// Overflowing literals (`1e999`) are rejected: the oracle's floats
+/// have no infinities — `Float.parse` errors on overflow — and a
+/// non-finite value would break §2.3's finiteness contract downstream
+/// (SPEC-GAPS #7).
 pub fn num_token(tok: &str) -> Option<f64> {
     let s = tok.trim_start_matches('+');
     if !num_grammar(s) {
         return None;
     }
-    s.parse::<f64>().ok()
+    s.parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
 fn parse_num(tok: &str, orig: &str, line: usize) -> Result<f64, Error> {

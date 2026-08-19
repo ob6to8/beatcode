@@ -1,4 +1,5 @@
 clean_errors_nonzero_exit
+decfmt_nonfinite_guard
 demo_renders_all_examples
 dilla_events_byte_exact
 double_render_byte_equality
@@ -15,7 +16,9 @@ empty_mix_is_one_second
 float_semantics_probes
 four_events_byte_exact
 loop_survives_score_error_and_keeps_watching
+midpipeline_overflow_rejected_at_compile
 noise_prefix_property
+overflowing_literals_rejected_at_parse
 p1_compile_determinism
 p2_render_determinism
 p3_swing_50_identity
@@ -33,6 +36,7 @@ render_receipt_peak_normalized_flag
 s16_range_symmetric
 seed_masking_probes
 sha256_fips_vectors
+subnormal_tempo_rejected_at_compile
 u64_to_f64_conversion_probes
 wav_header_reference_bytes
 wav_header_sanity_on_render

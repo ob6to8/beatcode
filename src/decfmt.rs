@@ -33,7 +33,10 @@ fn pow10(n: u32) -> u128 {
 /// Integer |x|·10^n rounded half away from zero, or None outside the
 /// exactness domain |x| ≤ 2^53/10^n.
 fn qprime(x: f64, n: u32) -> Option<u128> {
-    if x.abs() > 9007199254740992.0 / pow10(n) as f64 {
+    // Non-finite inputs are unreachable from the pipeline (rejected at
+    // parse/compile), but guard anyway: without this, NaN would pass
+    // the domain check below (NaN > y is false) and overflow the shift.
+    if !x.is_finite() || x.abs() > 9007199254740992.0 / pow10(n) as f64 {
         return None;
     }
     let (_, m, e) = decompose(x);

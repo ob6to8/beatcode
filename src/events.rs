@@ -93,6 +93,11 @@ pub fn compile(sc: &Score) -> Result<Vec<Event>, Error> {
         return Err(Error::Compile("bars must be at least 1".to_string()));
     }
     let spb = 60.0 / sc.tempo;
+    // A subnormal tempo overflows spb to inf; the oracle's arithmetic
+    // raises there (like tempo 0), so reject cleanly (SPEC-GAPS #7).
+    if !spb.is_finite() {
+        return Err(Error::Compile("tempo out of range".to_string()));
+    }
     let pattern = Rational::new(sc.bars, 1)
         .and_then(|b| b.mul(Rational::new(4, 1).expect("4/1")))
         .map_err(rat_err)?;
@@ -148,7 +153,10 @@ fn compile_voice(
     };
 
     for i in 0..n_steps {
-        let ch = gate[(i as usize) % gate.len()];
+        // rem_euclid keeps the index target-width-independent (a bare
+        // `i as usize` would truncate on 32-bit targets once i ≥ 2^32,
+        // breaking Class A cross-platform byte-exactness).
+        let ch = gate[i.rem_euclid(gate.len() as i64) as usize];
         if ch == GateChar::Rest {
             continue;
         }
@@ -186,6 +194,22 @@ fn compile_voice(
             None => None,
         };
         let performed = clamp0(((grid.to_f() * spb + swing_s) + lane_s) + hum_s);
+        // All literals are finite (§5.8 num!), but extreme-magnitude
+        // combinations can still overflow to ±inf (and 0·inf to NaN)
+        // mid-pipeline. The oracle raises on any such operation; keep
+        // §2.3's "performed_s is finite" contract with a clean error
+        // before anything non-finite reaches rounding or JSONL
+        // (SPEC-GAPS #7).
+        if !(swing_s.is_finite()
+            && lane_s.is_finite()
+            && hum_s.is_finite()
+            && performed.is_finite())
+        {
+            return Err(Error::Compile(format!(
+                "voice {}: non-finite event timing (arithmetic overflow)",
+                v.name
+            )));
+        }
         events.push(Event {
             voice: v.name.clone(),
             kind,
