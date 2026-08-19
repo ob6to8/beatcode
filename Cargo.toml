@@ -1,0 +1,13 @@
+[package]
+name = "bc"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+
+[dependencies]
+
+# Optimized tests: Rust float ops are IEEE-strict at every opt level
+# (no fast-math, no implicit FMA contraction), so this cannot change
+# results — it only makes the FIPS long vector and renders fast.
+[profile.test]
+opt-level = 2

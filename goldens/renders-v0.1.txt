@@ -1,0 +1,13 @@
+# bc v0.1 render hashes — sha256 of the full WAV bytes for each
+# example score (SPEC §9.8, §11.3 item 7; PLAN.md Phase 3).
+#
+# Recorded on: Linux x86_64 (kernel 6.18.5), rustc 1.94.1 (pinned via
+# rust-toolchain.toml). CI re-renders on {ubuntu-latest, macos-latest}
+# and diffs against these hashes on every push — both OSes matching
+# *is* the cross-machine determinism claim, re-proven continuously.
+#
+# Format: <output name>  <sha256>
+four.wav  90577ac5bffb4e6488c808d84b12422abc3449c7a5b78f4ac22f5088bb9fc049
+dilla.wav  61711a635e5479fd854e2b508dcd62b63edfe52c5497597bf66b1d7642fa4813
+poly.wav  7d712bfd4422fc68f85deb73986784ae2fdbb0ad741040e26282a3507622e381
+edge.wav  b0d61b868c4b70a7397438687c4feec8ad15e0d68836cd91827b34492137d5ab

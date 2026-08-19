@@ -1,0 +1,85 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install pinned toolchain (rust-toolchain.toml)
+        run: |
+          rustup toolchain install || rustup show
+          rustup component add rustfmt clippy || true
+          rustc --version
+
+      - name: fmt
+        run: cargo fmt --check
+
+      - name: clippy (deny warnings)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: test
+        run: cargo test
+
+      - name: banned tokens in the render path (SPEC §8.4)
+        run: |
+          # The spec's five tokens, plus the wider libm-lowered family
+          # the §8.4 rule exists to keep out (powi is also unpinned).
+          if grep -RnE '\.sin\(|\.cos\(|\.exp\(|powf|mul_add|\.tan\(|\.asin\(|\.acos\(|\.atan\(|\.atan2\(|\.sin_cos\(|\.sinh\(|\.cosh\(|\.tanh\(|\.asinh\(|\.acosh\(|\.atanh\(|\.exp2\(|\.exp_m1\(|\.ln\(|\.ln_1p\(|\.log|\.cbrt\(|\.hypot\(|\.powi\(' src/; then
+            echo "banned transcendental/FMA token found in src/"; exit 1
+          fi
+
+      - name: goldens are frozen (fail if anything under goldens/ changed)
+        run: |
+          shasum -a 256 --check --strict .github/goldens.sha256
+          committed=$(grep -c 'goldens/' .github/goldens.sha256)
+          actual=$(git ls-files goldens/ | wc -l | tr -d ' ')
+          if [ "$committed" != "$actual" ]; then
+            echo "goldens/ file set changed: manifest lists $committed, tree has $actual"
+            git ls-files goldens/
+            exit 1
+          fi
+
+      - name: no test deleted or ignored
+        run: |
+          if grep -Rn '#\[ignore' src/ tests/; then
+            echo "#[ignore] found — ignoring tests is not allowed"; exit 1
+          fi
+          # Semantic check: the ignored-test set must be empty however it
+          # was produced (catches cfg_attr(..., ignore) and friends,
+          # which the textual grep cannot see).
+          ignored=$(cargo test -- --list --ignored 2>/dev/null | grep ': test$' || true)
+          if [ -n "$ignored" ]; then
+            echo "ignored tests found:"; echo "$ignored"; exit 1
+          fi
+          # The manifest is the authoritative test roster: exact match
+          # required, so deletions always fail and additions must update
+          # .github/test-manifest.txt in the same (reviewable) commit.
+          cargo test -- --list 2>/dev/null | grep ': test$' | sed 's/: test$//' | sort -u > "${RUNNER_TEMP}/current-tests.txt"
+          if ! diff -u .github/test-manifest.txt "${RUNNER_TEMP}/current-tests.txt"; then
+            echo "test roster differs from .github/test-manifest.txt (deletions are forbidden; additions must be recorded there)"
+            exit 1
+          fi
+
+      - name: render hashes match committed goldens (Class C, SPEC §11.3 item 7)
+        run: |
+          if [ -f goldens/renders-v0.1.txt ]; then
+            bash scripts/check_renders.sh
+          else
+            echo "goldens/renders-v0.1.txt not yet committed (pre-Phase 3) — skipping"
+          fi
+
+      - name: working tree unchanged (nothing mutated tracked files during CI)
+        run: git diff --exit-code
