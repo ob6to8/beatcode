@@ -178,7 +178,7 @@ pub fn run() {
         }
         (Some("play"), Some(path)) => cmd_play(path),
         (Some("loop"), Some(path)) => cmd_loop(path),
-        (Some("demo"), None) => cmd_demo(),
+        (Some("demo"), _) => cmd_demo(), // trailing tokens ignored, like §5.2 directives
         _ => {
             eprint!("{USAGE}");
             std::process::exit(1);
