@@ -10,7 +10,7 @@ every normative claim. [`PLAN.md`](PLAN.md) is the build plan.
 **How to read this document.** *Normative* = behavior the
 implementation must reproduce to pass the goldens (Class A below),
 plus the determinism rules. *Informative* = error-message texts,
-the reference kit recipes (Class B), and the historical behaviors
+the reference kit recipes (Class B), and the transcript behaviors
 cataloged in §5.10 — surfaces where this implementation is licensed
 to differ, each with its decided posture. §12 is implementation
 guidance (Rust), including the exact decimal-rounding algorithm the
@@ -399,10 +399,10 @@ rejected** with a clean error (§5.10 #12).
 ### 5.9 Error model
 
 - Parse errors: `score error, line N: <message>` — the line number is
-  normative, the message text informative. (One historical exception
-  in the transcripts: a bare `swing` with no arguments crashed
-  uncleanly in the reference — this implementation raises a clean
-  line-cited error instead; `goldens/semantics-probes.txt` §E6.)
+  normative, the message text informative. (One exception recorded in
+  the transcripts: a bare `swing` with no arguments crashes uncleanly
+  there — this implementation raises a clean line-cited error instead;
+  `goldens/semantics-probes.txt` §E6.)
 - Compile-time errors (no line numbers): missing gate (`voice X has
   no gate`), non-dividing clock (`voice X: clock does not divide
   pattern`), and the rejections adopted in §5.10.
@@ -414,10 +414,10 @@ rejected** with a clean error (§5.10 #12).
   succeed/fail (and the cited line) as the contract, with the two
   §5.10 exceptions below.
 
-### 5.10 Historical-behavior catalog and decided postures
+### 5.10 Transcript-behavior catalog and decided postures
 
-The captured reference exhibited these behaviors; each row records
-what **this implementation does**. "Match" = reproduce exactly.
+The golden transcripts record these behaviors; each row states what
+**this implementation does**. "Match" = reproduce exactly.
 Two rows diverge from the probe transcript on purpose; those probe
 cases are **expected-to-diverge** in the conformance run.
 
@@ -591,8 +591,8 @@ decimals; `performed_s` rounded to **6**; (CLI: WAV seconds to
 - Beware: Rust's `format!("{:.N}")` rounds ties **to even** — it
   disagrees at exactly these dyadic points. Use the exact algorithm
   in §12.5 for both value-rounding and formatting.
-- **One known formatter boundary** (probed, §E3): the captured
-  reference's *formatter* double-rounded through an f64 multiply, so
+- **One known formatter boundary** (probed, §E3): the formatter that
+  produced the transcripts double-rounds through an f64 multiply, so
   at last-ulp-near-half inputs it disagrees with the exact rule —
   `goldens/float-semantics.txt` shows `ftb(5.0e-7) = 0.000001` where
   the exact rule gives `0.0`. This implementation uses the exact rule
@@ -856,8 +856,7 @@ boundary (§6.10) and the final `pow` probe (transcendental —
 platform-scoped, not Class A).
 ² two cases are **expected-to-diverge** by decided posture (§5.10):
 `bars 0` and negative `vel`. Error *texts* in the transcript are
-historical and informative only; accept/reject and line numbers are
-the contract.
+informative only; accept/reject and line numbers are the contract.
 
 ### 11.3 Acceptance — v0.1 is done when
 
