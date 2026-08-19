@@ -1,0 +1,75 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install pinned toolchain (rust-toolchain.toml)
+        run: |
+          rustup toolchain install || rustup show
+          rustup component add rustfmt clippy || true
+          rustc --version
+
+      - name: fmt
+        run: cargo fmt --check
+
+      - name: clippy (deny warnings)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: test
+        run: cargo test
+
+      - name: banned tokens in the render path (SPEC §8.4)
+        run: |
+          if grep -RnE '\.sin\(|\.cos\(|\.exp\(|powf|mul_add' src/; then
+            echo "banned transcendental/FMA token found in src/"; exit 1
+          fi
+
+      - name: goldens are frozen (fail if anything under goldens/ changed)
+        run: |
+          shasum -a 256 --check --strict .github/goldens.sha256
+          committed=$(grep -c 'goldens/' .github/goldens.sha256)
+          actual=$(git ls-files goldens/ | wc -l | tr -d ' ')
+          if [ "$committed" != "$actual" ]; then
+            echo "goldens/ file set changed: manifest lists $committed, tree has $actual"
+            git ls-files goldens/
+            exit 1
+          fi
+
+      - name: no test deleted or ignored
+        run: |
+          if grep -Rn '#\[ignore' src/ tests/; then
+            echo "#[ignore] found — ignoring tests is not allowed"; exit 1
+          fi
+          cargo test -- --list 2>/dev/null | grep ': test$' | sed 's/: test$//' | sort -u > "${RUNNER_TEMP}/current-tests.txt"
+          missing=$(comm -23 <(sort -u .github/test-manifest.txt) "${RUNNER_TEMP}/current-tests.txt")
+          if [ -n "$missing" ]; then
+            echo "tests deleted (present in .github/test-manifest.txt, absent from cargo test --list):"
+            echo "$missing"
+            exit 1
+          fi
+
+      - name: render hashes match committed goldens (Class C, SPEC §11.3 item 7)
+        run: |
+          if [ -f goldens/renders-v0.1.txt ]; then
+            bash scripts/check_renders.sh
+          else
+            echo "goldens/renders-v0.1.txt not yet committed (pre-Phase 3) — skipping"
+          fi
+
+      - name: working tree unchanged (nothing mutated tracked files during CI)
+        run: git diff --exit-code
