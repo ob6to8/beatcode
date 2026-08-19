@@ -1,7 +1,8 @@
 //! Mixdown and WAV (SPEC §9): placement from the *rounded*
 //! `performed_s`, event-then-frame summation order, `last + 22050`
 //! tail, conditional peak normalization, symmetric ±32767 ties-away
-//! s16, LE interleave. No reassociation, no SIMD, no `mul_add`.
+//! s16, LE interleave. No reassociation, no SIMD, no fused
+//! multiply-add.
 
 use crate::events::Event;
 use crate::synth::{Kit, cos_p, sin_p};
