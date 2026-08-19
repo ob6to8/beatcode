@@ -9,4 +9,8 @@ pub mod events;
 pub mod jsonl;
 pub mod prng;
 pub mod rational;
+pub mod render;
 pub mod score;
+pub mod sha256;
+pub mod synth;
+pub mod wav;
