@@ -41,3 +41,21 @@ shapes; the reference's behavior is unrecorded except for bare `swing`,
 which crashed — §E6). Chose: clean line-cited error
 `'<kw>' needs an argument`, mirroring the §E6 posture for bare
 `swing` (which this implementation also rejects cleanly, per spec).
+
+## 5 · `loop` renders once on startup
+
+§10 defines `loop` as "poll the file's mtime every 200 ms; on change
+re-render + play" — whether the freshly started loop performs an
+initial render is unspecified. Chose: the first poll treats the
+existing file as a change (render + play immediately, or `!! …` if the
+score is currently broken), then watch. Why: a jam loop that stays
+silent until the first save is surprising, and announcing a pre-existing
+typo immediately beats waiting for the user to save again.
+
+## 6 · Receipt seconds format trims trailing zeros
+
+§9.8/§6.10 fix WAV seconds at 2 decimals via the one §12.5 routine,
+whose formatting half trims trailing zeros keeping ≥ 1 fractional
+digit — so exactly 2.60 s prints `2.6s`, not `2.60s`. Chose: use the
+shared routine unmodified (the spec's "one routine serves" §12.5 note).
+Informative surface either way.
