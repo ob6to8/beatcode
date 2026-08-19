@@ -60,3 +60,7 @@ bc play   <score.bc>          render + play once
 bc loop   <score.bc>          re-render + play on every save (the jam loop)
 bc demo                       render all examples/
 ```
+
+## License
+
+[Apache 2.0](LICENSE).

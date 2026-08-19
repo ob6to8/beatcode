@@ -20,9 +20,10 @@ phase gate per commit).
 ## Phases — gate on the named checks before moving on
 
 **Phase 0 — scaffold.** Cargo binary crate `bc` (edition 2024, zero
-dependencies), `rust-toolchain.toml` pinning current stable, CI
-workflow (below), `.gitignore`. Golden checks live in
-`tests/` as integration tests reading `goldens/` and `examples/`.
+dependencies, `license = "Apache-2.0"` matching the repo's LICENSE),
+`rust-toolchain.toml` pinning current stable, CI workflow (below),
+`.gitignore`. Golden checks live in `tests/` as integration tests
+reading `goldens/` and `examples/`.
 
 **Phase 1 — the event compiler (Class A).** `rational` → `prng` →
 `decfmt` (SPEC §12.5 exactly, including the sign-of-zero branch) →
